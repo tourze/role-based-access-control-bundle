@@ -1,0 +1,24 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+    public: false
+
+  Tourze\RoleBasedAccessControlBundle\Repository\:
+    resource: '../../Repository/'
+
+  # Controller  
+  Tourze\RoleBasedAccessControlBundle\Controller\:
+    resource: '../../Controller/'
+
+  # Service
+  Tourze\RoleBasedAccessControlBundle\Service\:
+    resource: '../../Service/'
+
+  # EventListener
+  Tourze\RoleBasedAccessControlBundle\EventListener\:
+    resource: '../../EventListener/'
+
+  # Permission Manager服务
+  rbac.permission_manager:
+    synthetic: true

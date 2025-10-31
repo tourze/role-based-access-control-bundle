@@ -1,0 +1,14 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+
+  # DataFixtures
+  Tourze\RoleBasedAccessControlBundle\DataFixtures\PermissionFixtures:
+    tags: ['doctrine.fixture.orm']
+    
+  Tourze\RoleBasedAccessControlBundle\DataFixtures\RoleFixtures:
+    tags: ['doctrine.fixture.orm']
+    
+  Tourze\RoleBasedAccessControlBundle\DataFixtures\UserRoleFixtures:
+    tags: ['doctrine.fixture.orm']
