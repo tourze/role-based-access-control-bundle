@@ -5,6 +5,7 @@ namespace Tourze\RoleBasedAccessControlBundle;
 use Doctrine\Bundle\DoctrineBundle\DoctrineBundle;
 use Symfony\Component\HttpKernel\Bundle\Bundle;
 use Tourze\BundleDependency\BundleDependencyInterface;
+use Tourze\EasyAdminMenuBundle\EasyAdminMenuBundle;
 
 class RoleBasedAccessControlBundle extends Bundle implements BundleDependencyInterface
 {
@@ -12,6 +13,7 @@ class RoleBasedAccessControlBundle extends Bundle implements BundleDependencyInt
     {
         return [
             DoctrineBundle::class => ['all' => true],
+            EasyAdminMenuBundle::class => ['all' => true],
         ];
     }
 }
