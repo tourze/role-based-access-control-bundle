@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tourze\RoleBasedAccessControlBundle\Tests\Repository;
 
+use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use Tourze\PHPUnitSymfonyKernelTest\AbstractRepositoryTestCase;
@@ -422,7 +423,7 @@ class RoleRepositoryTest extends AbstractRepositoryTestCase
     /**
      * @return RoleRepository
      */
-    protected function getRepository(): \Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository
+    protected function getRepository(): ServiceEntityRepository
     {
         return $this->roleRepository;
     }

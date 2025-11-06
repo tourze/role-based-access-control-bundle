@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-
 namespace Tourze\RoleBasedAccessControlBundle\Tests\Service;
 
 use Doctrine\Common\Collections\Collection;
@@ -30,6 +29,7 @@ use Doctrine\ORM\Query\FilterCollection;
 use Doctrine\ORM\Query\ResultSetMapping;
 use Doctrine\ORM\QueryBuilder;
 use Doctrine\ORM\UnitOfWork;
+use Doctrine\Persistence\ManagerRegistry;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -372,8 +372,8 @@ class PermissionManagerTest extends TestCase
         };
 
         // @phpstan-ignore-next-line
-        $this->roleRepository = new class($this->createMock(\Doctrine\Persistence\ManagerRegistry::class)) extends RoleRepository {
-            public function __construct(\Doctrine\Persistence\ManagerRegistry $registry)
+        $this->roleRepository = new class($this->createMock(ManagerRegistry::class)) extends RoleRepository {
+            public function __construct(ManagerRegistry $registry)
             {
                 parent::__construct($registry);
             }
@@ -393,8 +393,8 @@ class PermissionManagerTest extends TestCase
         };
 
         // @phpstan-ignore-next-line
-        $this->permissionRepository = new class($this->createMock(\Doctrine\Persistence\ManagerRegistry::class)) extends PermissionRepository {
-            public function __construct(\Doctrine\Persistence\ManagerRegistry $registry)
+        $this->permissionRepository = new class($this->createMock(ManagerRegistry::class)) extends PermissionRepository {
+            public function __construct(ManagerRegistry $registry)
             {
                 parent::__construct($registry);
             }
@@ -429,8 +429,8 @@ class PermissionManagerTest extends TestCase
         };
 
         // @phpstan-ignore-next-line
-        $this->userRoleRepository = new class($this->createMock(\Doctrine\Persistence\ManagerRegistry::class)) extends UserRoleRepository {
-            public function __construct(\Doctrine\Persistence\ManagerRegistry $registry)
+        $this->userRoleRepository = new class($this->createMock(ManagerRegistry::class)) extends UserRoleRepository {
+            public function __construct(ManagerRegistry $registry)
             {
                 parent::__construct($registry);
             }
