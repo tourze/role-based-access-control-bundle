@@ -161,7 +161,6 @@ class UserRoleRepository extends ServiceEntityRepository
         // 为每个用户获取角色列表
         $result = [];
         foreach ($usersWithMultipleRoles as $userInfo) {
-            // @phpstan-ignore-next-line function.alreadyNarrowedType,isset.offset,booleanAnd.alwaysTrue
             assert(is_array($userInfo) && isset($userInfo['userId']));
 
             $roles = $this->createQueryBuilder('ur')
@@ -173,7 +172,6 @@ class UserRoleRepository extends ServiceEntityRepository
                 ->getSingleColumnResult()
             ;
 
-            // @phpstan-ignore-next-line function.alreadyNarrowedType
             assert(is_numeric($userInfo['roleCount']));
 
             /** @var string[] $roles */

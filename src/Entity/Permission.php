@@ -23,7 +23,7 @@ class Permission implements \Stringable
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column(type: Types::INTEGER, options: ['comment' => '权限ID'])]
-    private ?int $id = null; // @phpstan-ignore-line property.unusedType (Doctrine auto-assigns after persist)
+    private ?int $id = null;
 
     #[ORM\Column(type: Types::STRING, length: 255, unique: true, options: ['comment' => '权限代码'])]
     #[Assert\NotBlank]

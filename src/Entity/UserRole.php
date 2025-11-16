@@ -19,7 +19,7 @@ class UserRole implements \Stringable
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column(type: Types::INTEGER, options: ['comment' => '主键ID'])]
-    private ?int $id = null; // @phpstan-ignore-line property.unusedType (Doctrine auto-assigns after persist)
+    private ?int $id = null;
 
     #[ORM\Column(name: 'user_id', type: Types::STRING, length: 255, options: ['comment' => '用户ID'])]
     #[Assert\NotBlank(message: '用户ID不能为空')]
