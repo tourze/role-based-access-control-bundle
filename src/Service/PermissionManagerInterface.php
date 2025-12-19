@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tourze\RoleBasedAccessControlBundle\Service;
 
 use Symfony\Component\Security\Core\User\UserInterface;
+use Tourze\RoleBasedAccessControlBundle\DTO\BulkOperationResult;
 use Tourze\RoleBasedAccessControlBundle\Entity\Role;
 
 /**

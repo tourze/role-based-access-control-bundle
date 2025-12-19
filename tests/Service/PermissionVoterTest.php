@@ -5,125 +5,57 @@ declare(strict_types=1);
 namespace Tourze\RoleBasedAccessControlBundle\Tests\Service;
 
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Authorization\Voter\VoterInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Tourze\PHPUnitSymfonyKernelTest\AbstractIntegrationTestCase;
+use Tourze\RoleBasedAccessControlBundle\Entity\Permission;
 use Tourze\RoleBasedAccessControlBundle\Entity\Role;
-use Tourze\RoleBasedAccessControlBundle\Service\BulkOperationResult;
-use Tourze\RoleBasedAccessControlBundle\Service\PermissionManagerInterface;
+use Tourze\RoleBasedAccessControlBundle\Service\PermissionManager;
 use Tourze\RoleBasedAccessControlBundle\Service\PermissionVoter;
-use Tourze\RoleBasedAccessControlBundle\Tests\TestUser;
 
 /**
  * @internal
  */
 #[CoversClass(PermissionVoter::class)]
-class PermissionVoterTest extends TestCase
+#[RunTestsInSeparateProcesses]
+class PermissionVoterTest extends AbstractIntegrationTestCase
 {
     private PermissionVoter $voter;
 
-    /**
-     * @var PermissionManagerInterface&object{setHasPermissionResult: callable(UserInterface, string, bool): void}
-     */
-    private PermissionManagerInterface $permissionManager;
+    private UserInterface $user;
 
     private TokenInterface $token;
 
-    private UserInterface $user;
-
-    protected function setUp(): void
+    protected function onSetUp(): void
     {
-        parent::setUp();
+        // 从容器获取 PermissionVoter 服务
+        $this->voter = self::getService(PermissionVoter::class);
 
-        // @phpstan-ignore assign.propertyType
-        $this->permissionManager = new class implements PermissionManagerInterface {
-            /** @var array<string, bool> */
-            private array $hasPermissionResults = [];
-
-            public function setHasPermissionResult(UserInterface $user, string $permission, bool $result): void
+        // 创建测试用户
+        $this->user = new class('test-' . uniqid() . '@example.com') implements UserInterface {
+            public function __construct(private string $email)
             {
-                $this->hasPermissionResults[$user->getUserIdentifier() . ':' . $permission] = $result;
             }
 
-            public function hasPermission(UserInterface $user, string $permission): bool
+            public function getUserIdentifier(): string
             {
-                return $this->hasPermissionResults[$user->getUserIdentifier() . ':' . $permission] ?? false;
-            }
-
-            // 其他必需方法的占位实现
-            public function assignRoleToUser(UserInterface $user, string $roleCode): bool
-            {
-                return false;
-            }
-
-            public function revokeRoleFromUser(UserInterface $user, string $roleCode): bool
-            {
-                return false;
-            }
-
-            public function addPermissionToRole(string $roleCode, string $permissionCode): bool
-            {
-                return false;
-            }
-
-            public function removePermissionFromRole(string $roleCode, string $permissionCode): bool
-            {
-                return false;
+                return $this->email;
             }
 
             /** @return array<string> */
-            public function getUserPermissions(UserInterface $user): array
+            public function getRoles(): array
             {
-                return [];
+                return ['ROLE_USER'];
             }
 
-            public function canDeleteRole(string $roleCode): bool
+            public function eraseCredentials(): void
             {
-                return false;
-            }
-
-            public function deleteRole(string $roleCode): void
-            {
-            }
-
-            public function canDeletePermission(string $permissionCode): bool
-            {
-                return false;
-            }
-
-            public function deletePermission(string $permissionCode): void
-            {
-            }
-
-            /** @param array<mixed> $userRoleMapping */
-            public function bulkAssignRoles(array $userRoleMapping): BulkOperationResult
-            {
-                throw new \Exception('Not implemented');
-            }
-
-            /** @param array<mixed> $userRoleMapping */
-            public function bulkRevokeRoles(array $userRoleMapping): BulkOperationResult
-            {
-                throw new \Exception('Not implemented');
-            }
-
-            /** @param array<mixed> $rolePermissionMapping */
-            public function bulkGrantPermissions(array $rolePermissionMapping): BulkOperationResult
-            {
-                throw new \Exception('Not implemented');
-            }
-
-            /** @return array<Role> */
-            public function getUserRoles(UserInterface $user): array
-            {
-                return [];
             }
         };
 
-        $this->voter = new PermissionVoter($this->permissionManager);
-
-        $this->user = new TestUser('test@example.com');
+        // 创建测试用的 Token
         $this->token = new class($this->user) implements TokenInterface {
             private UserInterface $user;
 
@@ -213,12 +145,11 @@ class PermissionVoterTest extends TestCase
     public function testSupportsReturnsTrueForPermissionAttributes(): void
     {
         // 测试：PERMISSION_*格式的属性应该被支持 - 通过vote方法间接测试
-        // @phpstan-ignore method.notFound
-        $this->permissionManager->setHasPermissionResult($this->user, 'PERMISSION_USER_EDIT', true);
-
+        // 用户默认没有权限，所以会返回ACCESS_DENIED而不是ACCESS_ABSTAIN
         $result = $this->voter->vote($this->token, null, ['PERMISSION_USER_EDIT']);
         // 如果supports返回true，vote会返回ACCESS_GRANTED或ACCESS_DENIED，而不是ACCESS_ABSTAIN
         $this->assertNotEquals(VoterInterface::ACCESS_ABSTAIN, $result);
+        $this->assertEquals(VoterInterface::ACCESS_DENIED, $result);
     }
 
     public function testSupportsReturnsFalseForNonPermissionAttributes(): void
@@ -237,10 +168,27 @@ class PermissionVoterTest extends TestCase
     public function testVoteReturnAccessGrantedWhenUserHasPermission(): void
     {
         // 测试：用户有权限时返回ACCESS_GRANTED
-        $attribute = 'PERMISSION_USER_EDIT';
+        $attribute = 'PERMISSION_USER_EDIT_' . uniqid();
+        $roleCode = 'ROLE_TEST_USER_' . uniqid();
 
-        // @phpstan-ignore method.notFound
-        $this->permissionManager->setHasPermissionResult($this->user, $attribute, true);
+        // 创建角色
+        $role = new Role();
+        $role->setCode($roleCode);
+        $role->setName('Test User Role');
+        $this->persistAndFlush($role);
+
+        // 创建权限
+        $permission = new Permission();
+        $permission->setCode($attribute);
+        $permission->setName('User Edit Permission');
+        $this->persistAndFlush($permission);
+
+        // 为角色添加权限
+        $permissionManager = self::getService(PermissionManager::class);
+        $permissionManager->addPermissionToRole($roleCode, $attribute);
+
+        // 为用户分配角色
+        $permissionManager->assignRoleToUser($this->user, $roleCode);
 
         $result = $this->voter->vote($this->token, null, [$attribute]);
 
@@ -250,10 +198,13 @@ class PermissionVoterTest extends TestCase
     public function testVoteReturnAccessDeniedWhenUserDoesNotHavePermission(): void
     {
         // 测试：用户没有权限时返回ACCESS_DENIED
-        $attribute = 'PERMISSION_USER_DELETE';
+        $attribute = 'PERMISSION_USER_DELETE_' . uniqid();
 
-        // @phpstan-ignore method.notFound
-        $this->permissionManager->setHasPermissionResult($this->user, $attribute, false);
+        // 创建权限但不分配给用户
+        $permission = new Permission();
+        $permission->setCode($attribute);
+        $permission->setName('User Delete Permission');
+        $this->persistAndFlush($permission);
 
         $result = $this->voter->vote($this->token, null, [$attribute]);
 

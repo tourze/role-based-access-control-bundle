@@ -4,501 +4,65 @@ declare(strict_types=1);
 
 namespace Tourze\RoleBasedAccessControlBundle\Tests\Service;
 
-use Doctrine\Common\Collections\Collection;
-use Doctrine\Common\Collections\Criteria;
-use Doctrine\Common\EventManager;
-use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\Driver;
-use Doctrine\DBAL\Driver\API\ExceptionConverter;
-use Doctrine\DBAL\LockMode;
-use Doctrine\DBAL\Platforms\AbstractPlatform;
-use Doctrine\DBAL\Schema\AbstractSchemaManager;
-use Doctrine\DBAL\ServerVersionProvider;
-use Doctrine\ORM\Cache;
-use Doctrine\ORM\Configuration;
-use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\EntityRepository;
-use Doctrine\ORM\Internal\Hydration\AbstractHydrator;
-use Doctrine\ORM\Mapping\ClassMetadata;
-use Doctrine\ORM\Mapping\ClassMetadataFactory;
-use Doctrine\ORM\NativeQuery;
-use Doctrine\ORM\Proxy\ProxyFactory;
-use Doctrine\ORM\Query;
-use Doctrine\ORM\Query\Expr;
-use Doctrine\ORM\Query\FilterCollection;
-use Doctrine\ORM\Query\ResultSetMapping;
-use Doctrine\ORM\QueryBuilder;
-use Doctrine\ORM\UnitOfWork;
-use Doctrine\Persistence\ManagerRegistry;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\TestCase;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Tourze\PHPUnitSymfonyKernelTest\AbstractIntegrationTestCase;
 use Tourze\RoleBasedAccessControlBundle\Entity\Permission;
 use Tourze\RoleBasedAccessControlBundle\Entity\Role;
-use Tourze\RoleBasedAccessControlBundle\Entity\UserRole;
 use Tourze\RoleBasedAccessControlBundle\Exception\DeletionConflictException;
 use Tourze\RoleBasedAccessControlBundle\Exception\PermissionNotFoundException;
 use Tourze\RoleBasedAccessControlBundle\Exception\RoleNotFoundException;
-use Tourze\RoleBasedAccessControlBundle\Repository\PermissionRepository;
-use Tourze\RoleBasedAccessControlBundle\Repository\RoleRepository;
-use Tourze\RoleBasedAccessControlBundle\Repository\UserRoleRepository;
-use Tourze\RoleBasedAccessControlBundle\Service\BulkOperationResult;
+use Tourze\RoleBasedAccessControlBundle\DTO\BulkOperationResult;
 use Tourze\RoleBasedAccessControlBundle\Service\PermissionManager;
-use Tourze\RoleBasedAccessControlBundle\Tests\TestUser;
 
 /**
  * @internal
  */
 #[CoversClass(PermissionManager::class)]
-class PermissionManagerTest extends TestCase
+#[RunTestsInSeparateProcesses]
+class PermissionManagerTest extends AbstractIntegrationTestCase
 {
     private PermissionManager $permissionManager;
 
-    private EntityManagerInterface $entityManager;
-
-    /**
-     * Mock RoleRepository 包含测试辅助方法
-     *
-     * @var RoleRepository
-     */
-    private RoleRepository $roleRepository;
-
-    /**
-     * Mock PermissionRepository 包含测试辅助方法
-     *
-     * @var PermissionRepository
-     */
-    private PermissionRepository $permissionRepository;
-
-    /**
-     * Mock UserRoleRepository 包含测试辅助方法
-     *
-     * @var UserRoleRepository
-     */
-    private UserRoleRepository $userRoleRepository;
-
     private UserInterface $user;
 
-    protected function setUp(): void
+    protected function onSetUp(): void
     {
-        parent::setUp();
-
-        // @phpstan-ignore-next-line
-        $this->entityManager = new class implements EntityManagerInterface {
-            private int $removeCallCount = 0;
-
-            private int $flushCallCount = 0;
-
-            /** @var array<object> */
-            private array $removedEntities = [];
-
-            /** @var Connection */
-            private $mockConnection;
-
-            public function __construct()
-            {
-                // 创建 Mock Connection 对象
-                $this->mockConnection = new class extends Connection {
-                    private bool $isTransactionActive = false;
-
-                    public function __construct(
-                        array $params = [],
-                        ?Driver $driver = null,
-                        ?\Doctrine\DBAL\Configuration $config = null,
-                    ) {
-                        // 使用默认参数调用父构造函数
-                        parent::__construct(
-                            $params,
-                            $driver ?? $this->createMockDriver(),
-                            $config ?? new \Doctrine\DBAL\Configuration()
-                        );
-                    }
-
-                    private function createMockDriver(): Driver
-                    {
-                        return new class implements Driver {
-                            public function connect(array $params): Driver\Connection
-                            {
-                                throw new \LogicException('Mock driver - not implemented');
-                            }
-
-                            public function getDatabasePlatform(?ServerVersionProvider $versionProvider = null): AbstractPlatform
-                            {
-                                throw new \LogicException('Mock driver - not implemented');
-                            }
-
-                            /**
-                             * @phpstan-ignore missingType.generics
-                             */
-                            public function getSchemaManager(Connection $conn, AbstractPlatform $platform): AbstractSchemaManager
-                            {
-                                throw new \LogicException('Mock driver - not implemented');
-                            }
-
-                            public function getExceptionConverter(): ExceptionConverter
-                            {
-                                throw new \LogicException('Mock driver - not implemented');
-                            }
-                        };
-                    }
-
-                    public function isTransactionActive(): bool
-                    {
-                        return $this->isTransactionActive;
-                    }
-
-                    public function setTransactionActive(bool $active): void
-                    {
-                        $this->isTransactionActive = $active;
-                    }
-                };
-            }
-
-            public function persist(object $entity): void
+        // 从容器获取服务
+        $this->permissionManager = self::getService(PermissionManager::class);
+        $this->user = new class('test-' . uniqid() . '@example.com') implements UserInterface {
+            public function __construct(private string $email)
             {
             }
 
-            public function remove(object $entity): void
+            public function getUserIdentifier(): string
             {
-                ++$this->removeCallCount;
-                $this->removedEntities[] = $entity;
-            }
-
-            public function merge(object $entity): object
-            {
-                return $entity;
-            }
-
-            public function clear(?string $entityName = null): void
-            {
-            }
-
-            public function detach(object $entity): void
-            {
-            }
-
-            public function refresh(object $object, LockMode|int|null $lockMode = null): void
-            {
-            }
-
-            public function flush(): void
-            {
-                ++$this->flushCallCount;
-            }
-
-            public function find(string $className, mixed $id, LockMode|int|null $lockMode = null, ?int $lockVersion = null): ?object
-            {
-                return null;
-            }
-
-            public function getReference(string $entityName, mixed $id): object
-            {
-                throw new \Exception('Not implemented');
-            }
-
-            public function getPartialReference(string $entityName, mixed $identifier): object
-            {
-                throw new \Exception('Not implemented');
-            }
-
-            public function getClassMetadata(string $className): ClassMetadata
-            {
-                throw new \Exception('Not implemented');
-            }
-
-            // @phpstan-ignore method.childReturnType
-            public function getMetadataFactory(): ClassMetadataFactory
-            {
-                throw new \Exception('Not implemented');
-            }
-
-            public function getRepository(string $className): EntityRepository
-            {
-                throw new \Exception('Not implemented');
-            }
-
-            public function contains(object $entity): bool
-            {
-                return false;
-            }
-
-            public function getEventManager(): EventManager
-            {
-                throw new \Exception('Not implemented');
-            }
-
-            public function getConfiguration(): Configuration
-            {
-                throw new \Exception('Not implemented');
-            }
-
-            public function isOpen(): bool
-            {
-                return true;
-            }
-
-            public function getUnitOfWork(): UnitOfWork
-            {
-                throw new \Exception('Not implemented');
-            }
-
-            public function getHydrator(string|int $hydrationMode): AbstractHydrator
-            {
-                throw new \Exception('Not implemented');
-            }
-
-            public function newHydrator(string|int $hydrationMode): AbstractHydrator
-            {
-                throw new \Exception('Not implemented');
-            }
-
-            public function getProxyFactory(): ProxyFactory
-            {
-                throw new \Exception('Not implemented');
-            }
-
-            public function initializeObject(object $obj): void
-            {
-            }
-
-            public function isUninitializedObject(mixed $value): bool
-            {
-                return false;
-            }
-
-            public function wrapInTransaction(callable $func): mixed
-            {
-                return $func($this);
-            }
-
-            public function commit(): void
-            {
-            }
-
-            public function rollback(): void
-            {
-            }
-
-            public function getConnection(): Connection
-            {
-                return $this->mockConnection;
-            }
-
-            public function getExpressionBuilder(): Expr
-            {
-                throw new \Exception('Not implemented');
-            }
-
-            public function beginTransaction(): void
-            {
-            }
-
-            public function transactional(callable $func): mixed
-            {
-                return $func($this);
-            }
-
-            public function lock(object $entity, LockMode|int $lockMode, \DateTimeInterface|int|null $lockVersion = null): void
-            {
-            }
-
-            public function copy(object $entity, bool $deep = false): object
-            {
-                return clone $entity;
-            }
-
-            public function getCache(): ?Cache
-            {
-                return null;
-            }
-
-            public function getFilters(): FilterCollection
-            {
-                throw new \Exception('Not implemented');
-            }
-
-            public function isFiltersStateClean(): bool
-            {
-                return true;
-            }
-
-            public function hasFilters(): bool
-            {
-                return false;
-            }
-
-            // 剩余的抽象方法
-            public function createQuery(string $dql = ''): Query
-            {
-                throw new \Exception('Not implemented');
-            }
-
-            public function createNativeQuery(string $sql, ResultSetMapping $rsm): NativeQuery
-            {
-                throw new \Exception('Not implemented');
-            }
-
-            public function createQueryBuilder(): QueryBuilder
-            {
-                throw new \Exception('Not implemented');
-            }
-
-            public function close(): void
-            {
-            }
-
-            public function getRemoveCallCount(): int
-            {
-                return $this->removeCallCount;
-            }
-
-            public function getFlushCallCount(): int
-            {
-                return $this->flushCallCount;
-            }
-
-            /** @return array<object> */
-            public function getRemovedEntities(): array
-            {
-                return $this->removedEntities;
-            }
-
-            public function resetCounts(): void
-            {
-                $this->removeCallCount = 0;
-                $this->flushCallCount = 0;
-                $this->removedEntities = [];
-            }
-        };
-
-        // @phpstan-ignore-next-line
-        $this->roleRepository = new class($this->createMock(ManagerRegistry::class)) extends RoleRepository {
-            public function __construct(ManagerRegistry $registry)
-            {
-                parent::__construct($registry);
-            }
-
-            /** @var array<string, ?Role> */
-            private array $findOneByCodeResults = [];
-
-            public function setFindOneByCodeResult(string $code, ?Role $role): void
-            {
-                $this->findOneByCodeResults[$code] = $role;
-            }
-
-            public function findOneByCode(string $code): ?Role
-            {
-                return $this->findOneByCodeResults[$code] ?? null;
-            }
-        };
-
-        // @phpstan-ignore-next-line
-        $this->permissionRepository = new class($this->createMock(ManagerRegistry::class)) extends PermissionRepository {
-            public function __construct(ManagerRegistry $registry)
-            {
-                parent::__construct($registry);
-            }
-
-            /** @var array<string, ?Permission> */
-            private array $findOneByCodeResults = [];
-
-            /** @var array<string, array<string>> */
-            private array $findPermissionsForDeletionCheckResults = [];
-
-            public function setFindOneByCodeResult(string $code, ?Permission $permission): void
-            {
-                $this->findOneByCodeResults[$code] = $permission;
-            }
-
-            /** @param array<string> $roleCodes */
-            public function setFindPermissionsForDeletionCheckResult(string $permissionCode, array $roleCodes): void
-            {
-                $this->findPermissionsForDeletionCheckResults[$permissionCode] = $roleCodes;
-            }
-
-            public function findOneByCode(string $code): ?Permission
-            {
-                return $this->findOneByCodeResults[$code] ?? null;
+                return $this->email;
             }
 
             /** @return array<string> */
-            public function findPermissionsForDeletionCheck(string $permissionCode): array
+            public function getRoles(): array
             {
-                return $this->findPermissionsForDeletionCheckResults[$permissionCode] ?? [];
+                return ['ROLE_USER'];
+            }
+
+            public function eraseCredentials(): void
+            {
             }
         };
-
-        // @phpstan-ignore-next-line
-        $this->userRoleRepository = new class($this->createMock(ManagerRegistry::class)) extends UserRoleRepository {
-            public function __construct(ManagerRegistry $registry)
-            {
-                parent::__construct($registry);
-            }
-
-            /** @var array<string, ?UserRole> */
-            private array $findUserRoleByUserAndRoleResults = [];
-
-            /** @var array<string, int> */
-            private array $countUsersByRoleCodeResults = [];
-
-            /** @var array<string, array<UserRole>> */
-            private array $findByUserIdResults = [];
-
-            public function setFindUserRoleByUserAndRoleResult(string $userId, string $roleCode, ?UserRole $userRole): void
-            {
-                $this->findUserRoleByUserAndRoleResults[$userId . ':' . $roleCode] = $userRole;
-            }
-
-            public function setCountUsersByRoleCodeResult(string $roleCode, int $count): void
-            {
-                $this->countUsersByRoleCodeResults[$roleCode] = $count;
-            }
-
-            /** @param array<UserRole> $userRoles */
-            public function setFindByUserIdResult(string $userId, array $userRoles): void
-            {
-                $this->findByUserIdResults[$userId] = $userRoles;
-            }
-
-            public function findUserRoleByUserAndRole(string $userId, string $roleCode): ?UserRole
-            {
-                return $this->findUserRoleByUserAndRoleResults[$userId . ':' . $roleCode] ?? null;
-            }
-
-            public function countUsersByRoleCode(string $roleCode): int
-            {
-                return $this->countUsersByRoleCodeResults[$roleCode] ?? 0;
-            }
-
-            /** @return array<UserRole> */
-            public function findByUserId(string $userId): array
-            {
-                return $this->findByUserIdResults[$userId] ?? [];
-            }
-        };
-
-        $this->permissionManager = new PermissionManager(
-            $this->entityManager,
-            $this->roleRepository,
-            $this->permissionRepository,
-            $this->userRoleRepository
-        );
-
-        $this->user = new TestUser('test@example.com');
     }
 
     public function testAssignRoleToUserWhenRoleExists(): void
     {
         // 测试：角色存在时分配成功
-        $roleCode = 'ROLE_EDITOR';
+        $roleCode = 'ROLE_EDITOR_' . uniqid();
 
+        // 创建并保存角色
         $role = new Role();
         $role->setCode($roleCode);
-
-        // @phpstan-ignore method.notFound
-        $this->roleRepository->setFindOneByCodeResult($roleCode, $role);
-        // @phpstan-ignore method.notFound
-        $this->userRoleRepository->setFindUserRoleByUserAndRoleResult($this->user->getUserIdentifier(), $roleCode, null);
+        $role->setName('Editor Role');
+        $this->persistAndFlush($role);
 
         // 执行测试
         $result = $this->permissionManager->assignRoleToUser($this->user, $roleCode);
@@ -510,14 +74,11 @@ class PermissionManagerTest extends TestCase
     public function testAssignRoleToUserWhenRoleNotExists(): void
     {
         // 测试：角色不存在时抛出异常
-        $roleCode = 'INVALID_ROLE';
-
-        // @phpstan-ignore method.notFound
-        $this->roleRepository->setFindOneByCodeResult($roleCode, null);
+        $roleCode = 'INVALID_ROLE_' . uniqid();
 
         // 断言异常
         $this->expectException(RoleNotFoundException::class);
-        $this->expectExceptionMessage('Role with code "INVALID_ROLE" not found');
+        $this->expectExceptionMessage('Role with code "' . $roleCode . '" not found');
 
         $this->permissionManager->assignRoleToUser($this->user, $roleCode);
     }
@@ -525,16 +86,18 @@ class PermissionManagerTest extends TestCase
     public function testAssignRoleToUserWhenAlreadyAssigned(): void
     {
         // 测试：用户已有角色时的幂等性
-        $roleCode = 'ROLE_EDITOR';
+        $roleCode = 'ROLE_EDITOR_' . uniqid();
 
+        // 创建并保存角色
         $role = new Role();
         $role->setCode($roleCode);
+        $role->setName('Editor Role');
+        $this->persistAndFlush($role);
 
-        // @phpstan-ignore method.notFound
-        $this->roleRepository->setFindOneByCodeResult($roleCode, $role);
-        // @phpstan-ignore method.notFound
-        $this->userRoleRepository->setFindUserRoleByUserAndRoleResult($this->user->getUserIdentifier(), $roleCode, new UserRole());
+        // 先分配一次角色
+        $this->permissionManager->assignRoleToUser($this->user, $roleCode);
 
+        // 再次分配相同角色
         $result = $this->permissionManager->assignRoleToUser($this->user, $roleCode);
 
         // 断言：没有发生变更
@@ -544,19 +107,20 @@ class PermissionManagerTest extends TestCase
     public function testAddPermissionToRoleWhenBothExist(): void
     {
         // 测试：角色和权限都存在时添加成功
-        $roleCode = 'ROLE_EDITOR';
-        $permissionCode = 'PERMISSION_USER_EDIT';
+        $roleCode = 'ROLE_EDITOR_' . uniqid();
+        $permissionCode = 'PERMISSION_USER_EDIT_' . uniqid();
 
+        // 创建并保存角色
         $role = new Role();
         $role->setCode($roleCode);
+        $role->setName('Editor Role');
+        $this->persistAndFlush($role);
 
+        // 创建并保存权限
         $permission = new Permission();
         $permission->setCode($permissionCode);
-
-        // @phpstan-ignore method.notFound
-        $this->roleRepository->setFindOneByCodeResult($roleCode, $role);
-        // @phpstan-ignore method.notFound
-        $this->permissionRepository->setFindOneByCodeResult($permissionCode, $permission);
+        $permission->setName('User Edit Permission');
+        $this->persistAndFlush($permission);
 
         $result = $this->permissionManager->addPermissionToRole($roleCode, $permissionCode);
 
@@ -566,19 +130,17 @@ class PermissionManagerTest extends TestCase
     public function testAddPermissionToRoleWhenPermissionNotExists(): void
     {
         // 测试：权限不存在时抛出异常
-        $roleCode = 'ROLE_EDITOR';
-        $permissionCode = 'INVALID_PERMISSION';
+        $roleCode = 'ROLE_EDITOR_' . uniqid();
+        $permissionCode = 'INVALID_PERMISSION_' . uniqid();
 
+        // 创建并保存角色
         $role = new Role();
         $role->setCode($roleCode);
-
-        // @phpstan-ignore method.notFound
-        $this->roleRepository->setFindOneByCodeResult($roleCode, $role);
-        // @phpstan-ignore method.notFound
-        $this->permissionRepository->setFindOneByCodeResult($permissionCode, null);
+        $role->setName('Editor Role');
+        $this->persistAndFlush($role);
 
         $this->expectException(PermissionNotFoundException::class);
-        $this->expectExceptionMessage('Permission with code "INVALID_PERMISSION" not found');
+        $this->expectExceptionMessage('Permission with code "' . $permissionCode . '" not found');
 
         $this->permissionManager->addPermissionToRole($roleCode, $permissionCode);
     }
@@ -586,11 +148,6 @@ class PermissionManagerTest extends TestCase
     public function testGetUserPermissionsReturnsCorrectPermissions(): void
     {
         // 测试：获取用户权限返回正确结果
-        $expectedPermissions = ['PERMISSION_USER_EDIT', 'PERMISSION_USER_VIEW'];
-
-        // @phpstan-ignore method.notFound
-        $this->userRoleRepository->setFindByUserIdResult($this->user->getUserIdentifier(), []);
-
         // 先返回空数组，绿色阶段会实现真正的逻辑
         $result = $this->permissionManager->getUserPermissions($this->user);
 
@@ -600,10 +157,7 @@ class PermissionManagerTest extends TestCase
     public function testHasPermissionReturnsTrueWhenUserHasPermission(): void
     {
         // 测试：用户有权限时返回true
-        $permission = 'PERMISSION_USER_EDIT';
-
-        // @phpstan-ignore method.notFound
-        $this->userRoleRepository->setFindByUserIdResult($this->user->getUserIdentifier(), []);
+        $permission = 'PERMISSION_USER_EDIT_' . uniqid();
 
         $result = $this->permissionManager->hasPermission($this->user, $permission);
 
@@ -613,10 +167,16 @@ class PermissionManagerTest extends TestCase
     public function testCanDeleteRoleReturnsFalseWhenRoleHasUsers(): void
     {
         // 测试：角色有用户时不能删除
-        $roleCode = 'ROLE_EDITOR';
+        $roleCode = 'ROLE_EDITOR_' . uniqid();
 
-        // @phpstan-ignore method.notFound
-        $this->userRoleRepository->setCountUsersByRoleCodeResult($roleCode, 5);
+        // 创建并保存角色
+        $role = new Role();
+        $role->setCode($roleCode);
+        $role->setName('Editor Role');
+        $this->persistAndFlush($role);
+
+        // 分配角色给用户
+        $this->permissionManager->assignRoleToUser($this->user, $roleCode);
 
         $result = $this->permissionManager->canDeleteRole($roleCode);
 
@@ -626,10 +186,16 @@ class PermissionManagerTest extends TestCase
     public function testDeleteRoleThrowsExceptionWhenCannotDelete(): void
     {
         // 测试：不能删除时抛出异常
-        $roleCode = 'ROLE_EDITOR';
+        $roleCode = 'ROLE_EDITOR_' . uniqid();
 
-        // @phpstan-ignore method.notFound
-        $this->userRoleRepository->setCountUsersByRoleCodeResult($roleCode, 3);
+        // 创建并保存角色
+        $role = new Role();
+        $role->setCode($roleCode);
+        $role->setName('Editor Role');
+        $this->persistAndFlush($role);
+
+        // 分配角色给用户
+        $this->permissionManager->assignRoleToUser($this->user, $roleCode);
 
         $this->expectException(DeletionConflictException::class);
 
@@ -639,11 +205,25 @@ class PermissionManagerTest extends TestCase
     public function testBulkAssignRolesHandlesPartialFailures(): void
     {
         // 测试：批量分配处理部分失败
+        $validRoleCode1 = 'ROLE_EDITOR_' . uniqid();
+        $validRoleCode2 = 'ROLE_VIEWER_' . uniqid();
+
         $mapping = [
-            'user1' => ['ROLE_EDITOR'],
-            'user2' => ['INVALID_ROLE'],  // 这个会失败
-            'user3' => ['ROLE_VIEWER'],
+            'user1' => [$validRoleCode1],
+            'user2' => ['INVALID_ROLE_' . uniqid()],  // 这个会失败
+            'user3' => [$validRoleCode2],
         ];
+
+        // 创建有效角色
+        $role1 = new Role();
+        $role1->setCode($validRoleCode1);
+        $role1->setName('Editor Role');
+        $this->persistAndFlush($role1);
+
+        $role2 = new Role();
+        $role2->setCode($validRoleCode2);
+        $role2->setName('Viewer Role');
+        $this->persistAndFlush($role2);
 
         $result = $this->permissionManager->bulkAssignRoles($mapping);
 
@@ -653,31 +233,37 @@ class PermissionManagerTest extends TestCase
     public function testBulkGrantPermissions(): void
     {
         // 测试：批量授予权限成功
+        $role1Code = 'ROLE_EDITOR_' . uniqid();
+        $role2Code = 'ROLE_VIEWER_' . uniqid();
+        $permission1Code = 'PERMISSION_USER_EDIT_' . uniqid();
+        $permission2Code = 'PERMISSION_USER_VIEW_' . uniqid();
+
         $rolePermissionMapping = [
-            'ROLE_EDITOR' => ['PERMISSION_USER_EDIT', 'PERMISSION_USER_VIEW'],
-            'ROLE_VIEWER' => ['PERMISSION_USER_VIEW'],
+            $role1Code => [$permission1Code, $permission2Code],
+            $role2Code => [$permission2Code],
         ];
 
+        // 创建角色
         $role1 = new Role();
-        $role1->setCode('ROLE_EDITOR');
+        $role1->setCode($role1Code);
+        $role1->setName('Editor Role');
+        $this->persistAndFlush($role1);
 
         $role2 = new Role();
-        $role2->setCode('ROLE_VIEWER');
+        $role2->setCode($role2Code);
+        $role2->setName('Viewer Role');
+        $this->persistAndFlush($role2);
 
+        // 创建权限
         $permission1 = new Permission();
-        $permission1->setCode('PERMISSION_USER_EDIT');
+        $permission1->setCode($permission1Code);
+        $permission1->setName('User Edit Permission');
+        $this->persistAndFlush($permission1);
 
         $permission2 = new Permission();
-        $permission2->setCode('PERMISSION_USER_VIEW');
-
-        // @phpstan-ignore method.notFound
-        $this->roleRepository->setFindOneByCodeResult('ROLE_EDITOR', $role1);
-        // @phpstan-ignore method.notFound
-        $this->roleRepository->setFindOneByCodeResult('ROLE_VIEWER', $role2);
-        // @phpstan-ignore method.notFound
-        $this->permissionRepository->setFindOneByCodeResult('PERMISSION_USER_EDIT', $permission1);
-        // @phpstan-ignore method.notFound
-        $this->permissionRepository->setFindOneByCodeResult('PERMISSION_USER_VIEW', $permission2);
+        $permission2->setCode($permission2Code);
+        $permission2->setName('User View Permission');
+        $this->persistAndFlush($permission2);
 
         $result = $this->permissionManager->bulkGrantPermissions($rolePermissionMapping);
 
@@ -688,23 +274,25 @@ class PermissionManagerTest extends TestCase
     public function testBulkGrantPermissionsHandlesPartialFailures(): void
     {
         // 测试：批量授予权限处理部分失败
+        $validRoleCode = 'ROLE_EDITOR_' . uniqid();
+        $permissionCode = 'PERMISSION_USER_EDIT_' . uniqid();
+
         $rolePermissionMapping = [
-            'ROLE_EDITOR' => ['PERMISSION_USER_EDIT'],
-            'INVALID_ROLE' => ['PERMISSION_USER_VIEW'],  // 这个会失败
+            $validRoleCode => [$permissionCode],
+            'INVALID_ROLE_' . uniqid() => ['PERMISSION_USER_VIEW_' . uniqid()],  // 这个会失败
         ];
 
+        // 创建有效角色
         $role = new Role();
-        $role->setCode('ROLE_EDITOR');
+        $role->setCode($validRoleCode);
+        $role->setName('Editor Role');
+        $this->persistAndFlush($role);
 
+        // 创建有效权限
         $permission = new Permission();
-        $permission->setCode('PERMISSION_USER_EDIT');
-
-        // @phpstan-ignore method.notFound
-        $this->roleRepository->setFindOneByCodeResult('ROLE_EDITOR', $role);
-        // @phpstan-ignore method.notFound
-        $this->roleRepository->setFindOneByCodeResult('INVALID_ROLE', null);
-        // @phpstan-ignore method.notFound
-        $this->permissionRepository->setFindOneByCodeResult('PERMISSION_USER_EDIT', $permission);
+        $permission->setCode($permissionCode);
+        $permission->setName('User Edit Permission');
+        $this->persistAndFlush($permission);
 
         $result = $this->permissionManager->bulkGrantPermissions($rolePermissionMapping);
 
@@ -716,18 +304,68 @@ class PermissionManagerTest extends TestCase
     public function testBulkRevokeRoles(): void
     {
         // 测试：批量撤销角色成功
+        $role1Code = 'ROLE_EDITOR_' . uniqid();
+        $role2Code = 'ROLE_VIEWER_' . uniqid();
+
         $userRoleMapping = [
-            'user1@example.com' => ['ROLE_EDITOR'],
-            'user2@example.com' => ['ROLE_VIEWER'],
+            'user1@example.com' => [$role1Code],
+            'user2@example.com' => [$role2Code],
         ];
 
-        $userRole1 = new UserRole();
-        $userRole2 = new UserRole();
+        // 创建角色
+        $role1 = new Role();
+        $role1->setCode($role1Code);
+        $role1->setName('Editor Role');
+        $this->persistAndFlush($role1);
 
-        // @phpstan-ignore method.notFound
-        $this->userRoleRepository->setFindUserRoleByUserAndRoleResult('user1@example.com', 'ROLE_EDITOR', $userRole1);
-        // @phpstan-ignore method.notFound
-        $this->userRoleRepository->setFindUserRoleByUserAndRoleResult('user2@example.com', 'ROLE_VIEWER', $userRole2);
+        $role2 = new Role();
+        $role2->setCode($role2Code);
+        $role2->setName('Viewer Role');
+        $this->persistAndFlush($role2);
+
+        // 创建测试用户并分配角色
+        $user1 = new class('user1-' . uniqid() . '@example.com') implements UserInterface {
+            public function __construct(private string $email)
+            {
+            }
+
+            public function getUserIdentifier(): string
+            {
+                return $this->email;
+            }
+
+            /** @return array<string> */
+            public function getRoles(): array
+            {
+                return ['ROLE_USER'];
+            }
+
+            public function eraseCredentials(): void
+            {
+            }
+        };
+        $user2 = new class('user2-' . uniqid() . '@example.com') implements UserInterface {
+            public function __construct(private string $email)
+            {
+            }
+
+            public function getUserIdentifier(): string
+            {
+                return $this->email;
+            }
+
+            /** @return array<string> */
+            public function getRoles(): array
+            {
+                return ['ROLE_USER'];
+            }
+
+            public function eraseCredentials(): void
+            {
+            }
+        };
+        $this->permissionManager->assignRoleToUser($user1, $role1Code);
+        $this->permissionManager->assignRoleToUser($user2, $role2Code);
 
         $result = $this->permissionManager->bulkRevokeRoles($userRoleMapping);
 
@@ -739,14 +377,9 @@ class PermissionManagerTest extends TestCase
     {
         // 测试：批量撤销角色处理不存在的分配
         $userRoleMapping = [
-            'user1@example.com' => ['ROLE_EDITOR'],
-            'user2@example.com' => ['ROLE_VIEWER'],
+            'user1@example.com' => ['ROLE_EDITOR_' . uniqid()],
+            'user2@example.com' => ['ROLE_VIEWER_' . uniqid()],
         ];
-
-        // @phpstan-ignore method.notFound
-        $this->userRoleRepository->setFindUserRoleByUserAndRoleResult('user1@example.com', 'ROLE_EDITOR', null);
-        // @phpstan-ignore method.notFound
-        $this->userRoleRepository->setFindUserRoleByUserAndRoleResult('user2@example.com', 'ROLE_VIEWER', null);
 
         $result = $this->permissionManager->bulkRevokeRoles($userRoleMapping);
 
@@ -757,10 +390,7 @@ class PermissionManagerTest extends TestCase
     public function testCanDeletePermissionReturnsTrueWhenNoRolesHavePermission(): void
     {
         // 测试：没有角色拥有权限时可以删除
-        $permissionCode = 'PERMISSION_USER_DELETE';
-
-        // @phpstan-ignore method.notFound
-        $this->permissionRepository->setFindPermissionsForDeletionCheckResult($permissionCode, []);
+        $permissionCode = 'PERMISSION_USER_DELETE_' . uniqid();
 
         $result = $this->permissionManager->canDeletePermission($permissionCode);
 
@@ -770,10 +400,23 @@ class PermissionManagerTest extends TestCase
     public function testCanDeletePermissionReturnsFalseWhenRolesHavePermission(): void
     {
         // 测试：有角色拥有权限时不能删除
-        $permissionCode = 'PERMISSION_USER_DELETE';
+        $roleCode = 'ROLE_ADMIN_' . uniqid();
+        $permissionCode = 'PERMISSION_USER_DELETE_' . uniqid();
 
-        // @phpstan-ignore method.notFound
-        $this->permissionRepository->setFindPermissionsForDeletionCheckResult($permissionCode, ['ROLE_ADMIN', 'ROLE_EDITOR']);
+        // 创建并保存角色
+        $role = new Role();
+        $role->setCode($roleCode);
+        $role->setName('Admin Role');
+        $this->persistAndFlush($role);
+
+        // 创建并保存权限
+        $permission = new Permission();
+        $permission->setCode($permissionCode);
+        $permission->setName('User Delete Permission');
+        $this->persistAndFlush($permission);
+
+        // 为角色添加权限
+        $this->permissionManager->addPermissionToRole($roleCode, $permissionCode);
 
         $result = $this->permissionManager->canDeletePermission($permissionCode);
 
@@ -785,18 +428,15 @@ class PermissionManagerTest extends TestCase
         $this->expectNotToPerformAssertions();
 
         // 测试：可以删除时成功删除权限
-        $permissionCode = 'PERMISSION_USER_DELETE';
+        $permissionCode = 'PERMISSION_USER_DELETE_' . uniqid();
 
+        // 创建并保存权限
         $permission = new Permission();
         $permission->setCode($permissionCode);
+        $permission->setName('User Delete Permission');
+        $this->persistAndFlush($permission);
 
-        // @phpstan-ignore method.notFound
-        $this->permissionRepository->setFindPermissionsForDeletionCheckResult($permissionCode, []);
-        // @phpstan-ignore method.notFound
-        $this->permissionRepository->setFindOneByCodeResult($permissionCode, $permission);
-
-        // EntityManager 的调用会在匿名类中自动记录
-
+        // 应该不抛出异常，幂等操作
         $this->permissionManager->deletePermission($permissionCode);
 
         // 验证删除操作不抛出异常（幂等操作）
@@ -805,13 +445,26 @@ class PermissionManagerTest extends TestCase
     public function testDeletePermissionThrowsExceptionWhenCannotDelete(): void
     {
         // 测试：不能删除时抛出异常
-        $permissionCode = 'PERMISSION_USER_DELETE';
+        $roleCode = 'ROLE_ADMIN_' . uniqid();
+        $permissionCode = 'PERMISSION_USER_DELETE_' . uniqid();
 
-        // @phpstan-ignore method.notFound
-        $this->permissionRepository->setFindPermissionsForDeletionCheckResult($permissionCode, ['ROLE_ADMIN']);
+        // 创建并保存角色
+        $role = new Role();
+        $role->setCode($roleCode);
+        $role->setName('Admin Role');
+        $this->persistAndFlush($role);
+
+        // 创建并保存权限
+        $permission = new Permission();
+        $permission->setCode($permissionCode);
+        $permission->setName('User Delete Permission');
+        $this->persistAndFlush($permission);
+
+        // 为角色添加权限
+        $this->permissionManager->addPermissionToRole($roleCode, $permissionCode);
 
         $this->expectException(DeletionConflictException::class);
-        $this->expectExceptionMessage('Cannot delete permission "PERMISSION_USER_DELETE"');
+        $this->expectExceptionMessage('Cannot delete permission "' . $permissionCode . '"');
 
         $this->permissionManager->deletePermission($permissionCode);
     }
@@ -821,14 +474,7 @@ class PermissionManagerTest extends TestCase
         $this->expectNotToPerformAssertions();
 
         // 测试：权限不存在时的幂等操作
-        $permissionCode = 'NONEXISTENT_PERMISSION';
-
-        // @phpstan-ignore method.notFound
-        $this->permissionRepository->setFindPermissionsForDeletionCheckResult($permissionCode, []);
-        // @phpstan-ignore method.notFound
-        $this->permissionRepository->setFindOneByCodeResult($permissionCode, null);
-
-        // EntityManager 的调用会在匿名类中自动记录
+        $permissionCode = 'NONEXISTENT_PERMISSION_' . uniqid();
 
         // 应该不抛出异常，幂等操作
         $this->permissionManager->deletePermission($permissionCode);
@@ -839,223 +485,25 @@ class PermissionManagerTest extends TestCase
     public function testRemovePermissionFromRoleWhenBothExist(): void
     {
         // 测试：角色和权限都存在时移除成功
-        $roleCode = 'ROLE_EDITOR';
-        $permissionCode = 'PERMISSION_USER_DELETE';
+        $roleCode = 'ROLE_EDITOR_' . uniqid();
+        $permissionCode = 'PERMISSION_USER_DELETE_' . uniqid();
 
+        // 创建并保存角色
         $role = new Role();
         $role->setCode($roleCode);
+        $role->setName('Editor Role');
+        $this->persistAndFlush($role);
 
+        // 创建并保存权限
         $permission = new Permission();
         $permission->setCode($permissionCode);
+        $permission->setName('User Delete Permission');
+        $this->persistAndFlush($permission);
 
-        // 模拟权限集合包含该权限
-        /** @var Collection<int, Permission> $permissionsCollection */
-        $permissionsCollection = new /**
-         * @implements Collection<int, Permission>
-         */
-        class implements Collection {
-            public function contains(mixed $element): bool
-            {
-                return true;
-            }
+        // 先为角色添加权限
+        $this->permissionManager->addPermissionToRole($roleCode, $permissionCode);
 
-            public function add(mixed $element): void
-            {
-            }
-
-            public function removeElement(mixed $element): bool
-            {
-                return true;
-            }
-
-            public function remove(string|int $key): mixed
-            {
-                return null;
-            }
-
-            public function clear(): void
-            {
-            }
-
-            public function count(): int
-            {
-                return 1;
-            }
-
-            public function isEmpty(): bool
-            {
-                return false;
-            }
-
-            public function toArray(): array
-            {
-                return [];
-            }
-
-            public function first(): mixed
-            {
-                return false;
-            }
-
-            public function last(): mixed
-            {
-                return false;
-            }
-
-            public function key(): int|string|null
-            {
-                return null;
-            }
-
-            public function current(): mixed
-            {
-                return false;
-            }
-
-            public function next(): mixed
-            {
-                return false;
-            }
-
-            public function exists(\Closure $p): bool
-            {
-                return false;
-            }
-
-            public function filter(\Closure $p): Collection
-            {
-                return $this;
-            }
-
-            public function forAll(\Closure $p): bool
-            {
-                return true;
-            }
-
-            public function map(\Closure $func): Collection
-            {
-                return $this;
-            }
-
-            public function partition(\Closure $p): array
-            {
-                return [$this, $this];
-            }
-
-            /** @return int|string|false */
-            public function indexOf(mixed $element): int|string|false
-            {
-                return false;
-            }
-
-            public function slice(int $offset, ?int $length = null): array
-            {
-                return [];
-            }
-
-            public function getIterator(): \Traversable
-            {
-                return new \ArrayIterator([]);
-            }
-
-            public function offsetExists(mixed $offset): bool
-            {
-                return false;
-            }
-
-            public function offsetGet(mixed $offset): mixed
-            {
-                return null;
-            }
-
-            public function offsetSet(mixed $offset, mixed $value): void
-            {
-            }
-
-            public function offsetUnset(mixed $offset): void
-            {
-            }
-
-            public function containsKey(string|int $key): bool
-            {
-                return false;
-            }
-
-            public function get(string|int $key): mixed
-            {
-                return null;
-            }
-
-            public function getKeys(): array
-            {
-                return [];
-            }
-
-            public function getValues(): array
-            {
-                return [];
-            }
-
-            public function set(string|int $key, mixed $value): void
-            {
-            }
-
-            public function matching(Criteria $criteria): static
-            {
-                return $this;
-            }
-
-            public function findFirst(\Closure $p): mixed
-            {
-                return null;
-            }
-
-            public function reduce(\Closure $func, mixed $initial = null): mixed
-            {
-                return $initial;
-            }
-        };
-
-        $role = new class($permissionsCollection) extends Role {
-            /** @var Collection<int, Permission> */
-            private $permissionsCollection;
-
-            /** @var bool */
-            private $removePermissionCalled = false;
-
-            /**
-             * @param Collection<int, Permission> $permissionsCollection
-             */
-            public function __construct($permissionsCollection)
-            {
-                parent::__construct();
-                $this->permissionsCollection = $permissionsCollection;
-            }
-
-            /** @return Collection<int, Permission> */
-            public function getPermissions(): Collection
-            {
-                return $this->permissionsCollection;
-            }
-
-            public function removePermission(Permission $permission): self
-            {
-                $this->removePermissionCalled = true;
-
-                return $this;
-            }
-
-            public function wasRemovePermissionCalled(): bool
-            {
-                return $this->removePermissionCalled;
-            }
-        };
-
-        // @phpstan-ignore method.notFound
-        $this->roleRepository->setFindOneByCodeResult($roleCode, $role);
-        // @phpstan-ignore method.notFound
-        $this->permissionRepository->setFindOneByCodeResult($permissionCode, $permission);
-
+        // 然后移除权限
         $result = $this->permissionManager->removePermissionFromRole($roleCode, $permissionCode);
 
         $this->assertTrue($result);
@@ -1064,11 +512,8 @@ class PermissionManagerTest extends TestCase
     public function testRemovePermissionFromRoleWhenRoleNotExists(): void
     {
         // 测试：角色不存在时返回false
-        $roleCode = 'NONEXISTENT_ROLE';
-        $permissionCode = 'PERMISSION_USER_DELETE';
-
-        // @phpstan-ignore method.notFound
-        $this->roleRepository->setFindOneByCodeResult($roleCode, null);
+        $roleCode = 'NONEXISTENT_ROLE_' . uniqid();
+        $permissionCode = 'PERMISSION_USER_DELETE_' . uniqid();
 
         $result = $this->permissionManager->removePermissionFromRole($roleCode, $permissionCode);
 
@@ -1078,16 +523,14 @@ class PermissionManagerTest extends TestCase
     public function testRemovePermissionFromRoleWhenPermissionNotExists(): void
     {
         // 测试：权限不存在时返回false
-        $roleCode = 'ROLE_EDITOR';
-        $permissionCode = 'NONEXISTENT_PERMISSION';
+        $roleCode = 'ROLE_EDITOR_' . uniqid();
+        $permissionCode = 'NONEXISTENT_PERMISSION_' . uniqid();
 
+        // 创建并保存角色
         $role = new Role();
         $role->setCode($roleCode);
-
-        // @phpstan-ignore method.notFound
-        $this->roleRepository->setFindOneByCodeResult($roleCode, $role);
-        // @phpstan-ignore method.notFound
-        $this->permissionRepository->setFindOneByCodeResult($permissionCode, null);
+        $role->setName('Editor Role');
+        $this->persistAndFlush($role);
 
         $result = $this->permissionManager->removePermissionFromRole($roleCode, $permissionCode);
 
@@ -1097,202 +540,22 @@ class PermissionManagerTest extends TestCase
     public function testRemovePermissionFromRoleWhenPermissionNotInRole(): void
     {
         // 测试：角色没有该权限时返回false（幂等操作）
-        $roleCode = 'ROLE_EDITOR';
-        $permissionCode = 'PERMISSION_USER_DELETE';
+        $roleCode = 'ROLE_EDITOR_' . uniqid();
+        $permissionCode = 'PERMISSION_USER_DELETE_' . uniqid();
 
+        // 创建并保存角色
+        $role = new Role();
+        $role->setCode($roleCode);
+        $role->setName('Editor Role');
+        $this->persistAndFlush($role);
+
+        // 创建并保存权限
         $permission = new Permission();
         $permission->setCode($permissionCode);
+        $permission->setName('User Delete Permission');
+        $this->persistAndFlush($permission);
 
-        /** @var Collection<int, Permission> $permissionsCollection */
-        $permissionsCollection = new /**
-         * @implements Collection<int, Permission>
-         */
-        class implements Collection {
-            public function contains(mixed $element): bool
-            {
-                return false;
-            }
-
-            public function add(mixed $element): void
-            {
-            }
-
-            public function removeElement(mixed $element): bool
-            {
-                return true;
-            }
-
-            public function remove(string|int $key): mixed
-            {
-                return null;
-            }
-
-            public function clear(): void
-            {
-            }
-
-            public function count(): int
-            {
-                return 1;
-            }
-
-            public function isEmpty(): bool
-            {
-                return false;
-            }
-
-            public function toArray(): array
-            {
-                return [];
-            }
-
-            public function first(): mixed
-            {
-                return false;
-            }
-
-            public function last(): mixed
-            {
-                return false;
-            }
-
-            public function key(): int|string|null
-            {
-                return null;
-            }
-
-            public function current(): mixed
-            {
-                return false;
-            }
-
-            public function next(): mixed
-            {
-                return false;
-            }
-
-            public function exists(\Closure $p): bool
-            {
-                return false;
-            }
-
-            public function filter(\Closure $p): Collection
-            {
-                return $this;
-            }
-
-            public function forAll(\Closure $p): bool
-            {
-                return true;
-            }
-
-            public function map(\Closure $func): Collection
-            {
-                return $this;
-            }
-
-            public function partition(\Closure $p): array
-            {
-                return [$this, $this];
-            }
-
-            /** @return int|string|false */
-            public function indexOf(mixed $element): int|string|false
-            {
-                return false;
-            }
-
-            public function slice(int $offset, ?int $length = null): array
-            {
-                return [];
-            }
-
-            public function getIterator(): \Traversable
-            {
-                return new \ArrayIterator([]);
-            }
-
-            public function offsetExists(mixed $offset): bool
-            {
-                return false;
-            }
-
-            public function offsetGet(mixed $offset): mixed
-            {
-                return null;
-            }
-
-            public function offsetSet(mixed $offset, mixed $value): void
-            {
-            }
-
-            public function offsetUnset(mixed $offset): void
-            {
-            }
-
-            public function containsKey(string|int $key): bool
-            {
-                return false;
-            }
-
-            public function get(string|int $key): mixed
-            {
-                return null;
-            }
-
-            public function getKeys(): array
-            {
-                return [];
-            }
-
-            public function getValues(): array
-            {
-                return [];
-            }
-
-            public function set(string|int $key, mixed $value): void
-            {
-            }
-
-            public function matching(Criteria $criteria): static
-            {
-                return $this;
-            }
-
-            public function findFirst(\Closure $p): mixed
-            {
-                return null;
-            }
-
-            public function reduce(\Closure $func, mixed $initial = null): mixed
-            {
-                return $initial;
-            }
-        };
-
-        $role = new class($permissionsCollection) extends Role {
-            /** @var Collection<int, Permission> */
-            private $permissionsCollection;
-
-            /** @param Collection<int, Permission> $permissionsCollection */
-            public function __construct($permissionsCollection)
-            {
-                parent::__construct();
-                $this->permissionsCollection = $permissionsCollection;
-            }
-
-            /** @return Collection<int, Permission> */
-            public function getPermissions(): Collection
-            {
-                return $this->permissionsCollection;
-            }
-        };
-
-        // @phpstan-ignore method.notFound
-        $this->roleRepository->setFindOneByCodeResult($roleCode, $role);
-        // @phpstan-ignore method.notFound
-        $this->permissionRepository->setFindOneByCodeResult($permissionCode, $permission);
-
+        // 不为角色添加权限，直接尝试移除（应该返回false）
         $result = $this->permissionManager->removePermissionFromRole($roleCode, $permissionCode);
 
         $this->assertFalse($result);
@@ -1301,15 +564,18 @@ class PermissionManagerTest extends TestCase
     public function testRevokeRoleFromUserWhenAssignmentExists(): void
     {
         // 测试：用户角色分配存在时撤销成功
-        $roleCode = 'ROLE_EDITOR';
+        $roleCode = 'ROLE_EDITOR_' . uniqid();
 
-        $userRole = new UserRole();
+        // 创建并保存角色
+        $role = new Role();
+        $role->setCode($roleCode);
+        $role->setName('Editor Role');
+        $this->persistAndFlush($role);
 
-        // @phpstan-ignore method.notFound
-        $this->userRoleRepository->setFindUserRoleByUserAndRoleResult($this->user->getUserIdentifier(), $roleCode, $userRole);
+        // 先为用户分配角色
+        $this->permissionManager->assignRoleToUser($this->user, $roleCode);
 
-        // EntityManager 的调用会在匿名类中自动记录
-
+        // 然后撤销角色
         $result = $this->permissionManager->revokeRoleFromUser($this->user, $roleCode);
 
         $this->assertTrue($result);
@@ -1318,12 +584,15 @@ class PermissionManagerTest extends TestCase
     public function testRevokeRoleFromUserWhenAssignmentNotExists(): void
     {
         // 测试：用户角色分配不存在时返回false（幂等操作）
-        $roleCode = 'ROLE_EDITOR';
+        $roleCode = 'ROLE_EDITOR_' . uniqid();
 
-        // @phpstan-ignore method.notFound
-        $this->userRoleRepository->setFindUserRoleByUserAndRoleResult($this->user->getUserIdentifier(), $roleCode, null);
-        // EntityManager 的调用会在匿名类中自动记录
+        // 创建并保存角色
+        $role = new Role();
+        $role->setCode($roleCode);
+        $role->setName('Editor Role');
+        $this->persistAndFlush($role);
 
+        // 不为用户分配角色，直接尝试撤销（应该返回false）
         $result = $this->permissionManager->revokeRoleFromUser($this->user, $roleCode);
 
         $this->assertFalse($result);

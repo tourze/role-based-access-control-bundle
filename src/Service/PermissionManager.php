@@ -6,6 +6,7 @@ namespace Tourze\RoleBasedAccessControlBundle\Service;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Tourze\RoleBasedAccessControlBundle\DTO\BulkOperationResult;
 use Tourze\RoleBasedAccessControlBundle\Entity\Role;
 use Tourze\RoleBasedAccessControlBundle\Entity\UserRole;
 use Tourze\RoleBasedAccessControlBundle\Exception\DeletionConflictException;
@@ -16,7 +17,7 @@ use Tourze\RoleBasedAccessControlBundle\Repository\PermissionRepository;
 use Tourze\RoleBasedAccessControlBundle\Repository\RoleRepository;
 use Tourze\RoleBasedAccessControlBundle\Repository\UserRoleRepository;
 
-class PermissionManager implements PermissionManagerInterface
+final class PermissionManager implements PermissionManagerInterface
 {
     public function __construct(
         private readonly EntityManagerInterface $entityManager,

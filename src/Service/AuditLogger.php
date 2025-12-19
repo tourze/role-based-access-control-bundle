@@ -11,7 +11,7 @@ use Symfony\Component\Security\Core\User\UserInterface;
 
 #[WithMonologChannel(channel: 'role_based_access_control')]
 #[Autoconfigure(public: true)]
-class AuditLogger implements AuditLoggerInterface
+final class AuditLogger implements AuditLoggerInterface
 {
     public function __construct(
         private readonly LoggerInterface $logger,

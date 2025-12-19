@@ -11,7 +11,7 @@ use Tourze\RoleBasedAccessControlBundle\DependencyInjection\RoleBasedAccessContr
  * @internal
  */
 #[CoversClass(RoleBasedAccessControlExtension::class)]
-class RoleBasedAccessControlExtensionTest extends AbstractDependencyInjectionExtensionTestCase
+final class RoleBasedAccessControlExtensionTest extends AbstractDependencyInjectionExtensionTestCase
 {
     protected function setUp(): void
     {

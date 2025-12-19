@@ -1,24 +1,23 @@
 services:
+  # default configuration for services in *this* file
   _defaults:
-    autowire: true
-    autoconfigure: true
+    autowire: true      # Automatically injects dependencies in your services.
+    autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
     public: false
 
-  Tourze\RoleBasedAccessControlBundle\Repository\:
-    resource: '../../Repository/'
-
-  # Controller  
   Tourze\RoleBasedAccessControlBundle\Controller\:
     resource: '../../Controller/'
 
-  # Service
+  Tourze\RoleBasedAccessControlBundle\Repository\:
+    resource: '../../Repository/'
+    public: true
+
   Tourze\RoleBasedAccessControlBundle\Service\:
     resource: '../../Service/'
-
-  # EventListener
+    public: true
   Tourze\RoleBasedAccessControlBundle\EventListener\:
     resource: '../../EventListener/'
+    public: true
 
-  # Permission Manager服务
-  rbac.permission_manager:
-    synthetic: true
+  Tourze\RoleBasedAccessControlBundle\Service\PermissionManagerInterface:
+    alias: Tourze\RoleBasedAccessControlBundle\Service\PermissionManager

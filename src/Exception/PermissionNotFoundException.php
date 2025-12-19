@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tourze\RoleBasedAccessControlBundle\Exception;
 
-class PermissionNotFoundException extends \InvalidArgumentException
+final class PermissionNotFoundException extends \InvalidArgumentException
 {
     private string $permissionCode;
 

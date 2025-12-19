@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tourze\RoleBasedAccessControlBundle\Exception;
 
-class RoleNotFoundException extends \InvalidArgumentException
+final class RoleNotFoundException extends \InvalidArgumentException
 {
     private string $roleCode;
 

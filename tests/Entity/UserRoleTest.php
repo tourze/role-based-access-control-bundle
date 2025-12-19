@@ -6,10 +6,10 @@ namespace Tourze\RoleBasedAccessControlBundle\Tests\Entity;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Security\Core\User\UserInterface;
 use Tourze\PHPUnitDoctrineEntity\AbstractEntityTestCase;
 use Tourze\RoleBasedAccessControlBundle\Entity\Role;
 use Tourze\RoleBasedAccessControlBundle\Entity\UserRole;
-use Tourze\RoleBasedAccessControlBundle\Tests\TestUser;
 
 /**
  * @internal
@@ -50,7 +50,26 @@ class UserRoleTest extends AbstractEntityTestCase
     public function testUserRoleCanSetAndGetUser(): void
     {
         $userRole = new UserRole();
-        $user = new TestUser('test@example.com');
+        $user = new class('test@example.com') implements UserInterface {
+            public function __construct(private string $email)
+            {
+            }
+
+            public function getUserIdentifier(): string
+            {
+                return $this->email;
+            }
+
+            /** @return array<string> */
+            public function getRoles(): array
+            {
+                return ['ROLE_USER'];
+            }
+
+            public function eraseCredentials(): void
+            {
+            }
+        };
 
         $userRole->setUser($user);
         $this->assertSame($user, $userRole->getUser());
@@ -106,7 +125,26 @@ class UserRoleTest extends AbstractEntityTestCase
     public function testUserRoleCompleteAssociation(): void
     {
         $userRole = new UserRole();
-        $user = new TestUser('admin@example.com');
+        $user = new class('admin@example.com') implements UserInterface {
+            public function __construct(private string $email)
+            {
+            }
+
+            public function getUserIdentifier(): string
+            {
+                return $this->email;
+            }
+
+            /** @return array<string> */
+            public function getRoles(): array
+            {
+                return ['ROLE_USER'];
+            }
+
+            public function eraseCredentials(): void
+            {
+            }
+        };
         $role = new Role();
         $role->setCode('ROLE_ADMIN');
         $role->setName('Administrator');
@@ -126,7 +164,26 @@ class UserRoleTest extends AbstractEntityTestCase
         $userRole = new UserRole();
 
         // 测试与string用户ID的兼容性
-        $user = new TestUser('user123@domain.com');
+        $user = new class('user123@domain.com') implements UserInterface {
+            public function __construct(private string $email)
+            {
+            }
+
+            public function getUserIdentifier(): string
+            {
+                return $this->email;
+            }
+
+            /** @return array<string> */
+            public function getRoles(): array
+            {
+                return ['ROLE_USER'];
+            }
+
+            public function eraseCredentials(): void
+            {
+            }
+        };
         $userRole->setUser($user);
 
         $retrievedUser = $userRole->getUser();

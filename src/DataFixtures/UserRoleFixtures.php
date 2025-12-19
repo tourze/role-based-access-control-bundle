@@ -10,7 +10,7 @@ use Doctrine\Persistence\ObjectManager;
 use Tourze\RoleBasedAccessControlBundle\Entity\Role;
 use Tourze\RoleBasedAccessControlBundle\Entity\UserRole;
 
-class UserRoleFixtures extends Fixture implements DependentFixtureInterface
+final class UserRoleFixtures extends Fixture implements DependentFixtureInterface
 {
     public const USER_ROLE_ADMIN_REFERENCE = 'user-role-admin';
     public const USER_ROLE_USER_REFERENCE = 'user-role-user';

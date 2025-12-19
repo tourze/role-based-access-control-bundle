@@ -51,8 +51,11 @@ class ComposerConfigurationTest extends TestCase
 
         $version = $require['symfony/framework-bundle'];
         $this->assertIsString($version);
-        // 项目使用Symfony 7.3，所以我们要求^7.3
-        $this->assertStringStartsWith('^7.3', $version);
+        // 项目使用Symfony 7.3，可以是 ^7.3 或 7.3.*
+        $this->assertTrue(
+            str_starts_with($version, '^7.3') || str_starts_with($version, '7.3'),
+            sprintf('Expected version to start with "^7.3" or "7.3", got "%s"', $version)
+        );
     }
 
     public function testPackageHasDoctrineDependencies(): void
@@ -123,10 +126,12 @@ class ComposerConfigurationTest extends TestCase
     public function testPackageVersionIs0Point0(): void
     {
         // 根据约束，内部包版本应该用0.0.*
-        if (isset($this->composerConfig['version'])) {
-            $version = $this->composerConfig['version'];
-            $this->assertIsString($version);
-            $this->assertStringStartsWith('0.0.', $version);
+        if (!isset($this->composerConfig['version'])) {
+            self::markTestSkipped('Package version is not specified in composer.json');
         }
+
+        $version = $this->composerConfig['version'];
+        $this->assertIsString($version);
+        $this->assertStringStartsWith('0.0.', $version);
     }
 }

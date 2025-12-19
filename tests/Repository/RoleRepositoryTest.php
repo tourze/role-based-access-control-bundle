@@ -119,7 +119,6 @@ class RoleRepositoryTest extends AbstractRepositoryTestCase
 
         // 获取角色及其用户数量
         $results = $repository->getRolesWithUserCount();
-        // @phpstan-ignore-next-line method.alreadyNarrowedType
         $this->assertIsArray($results);
 
         // 查找我们创建的角色

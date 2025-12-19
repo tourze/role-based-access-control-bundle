@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Tourze\RoleBasedAccessControlBundle\Tests\Service;
+namespace Tourze\RoleBasedAccessControlBundle\Tests\DTO;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use Tourze\RoleBasedAccessControlBundle\Service\BulkOperationResult;
+use Tourze\RoleBasedAccessControlBundle\DTO\BulkOperationResult;
 
 /**
  * @internal

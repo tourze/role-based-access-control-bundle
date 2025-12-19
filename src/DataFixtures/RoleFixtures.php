@@ -8,7 +8,7 @@ use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
 use Tourze\RoleBasedAccessControlBundle\Entity\Role;
 
-class RoleFixtures extends Fixture
+final class RoleFixtures extends Fixture
 {
     public const ROLE_SUPER_ADMIN_REFERENCE = 'role-super-admin';
     public const ROLE_ADMIN_REFERENCE = 'role-admin';

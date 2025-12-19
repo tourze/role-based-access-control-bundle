@@ -10,7 +10,7 @@ use Doctrine\ORM\Events;
 use Tourze\RoleBasedAccessControlBundle\Entity\Role;
 
 #[AsEntityListener(event: Events::preUpdate, method: 'preUpdate', entity: Role::class)]
-class RoleUpdateListener
+final class RoleUpdateListener
 {
     public function preUpdate(Role $role, PreUpdateEventArgs $args): void
     {

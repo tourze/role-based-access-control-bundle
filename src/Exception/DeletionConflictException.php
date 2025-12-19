@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tourze\RoleBasedAccessControlBundle\Exception;
 
-class DeletionConflictException extends \RuntimeException
+final class DeletionConflictException extends \RuntimeException
 {
     private string $entityIdentifier;
 

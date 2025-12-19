@@ -11,7 +11,6 @@ use Tourze\RoleBasedAccessControlBundle\RoleBasedAccessControlBundle;
 
 /**
  * @internal
- * @phpstan-ignore symplify.forbiddenExtendOfNonAbstractClass
  */
 #[CoversClass(RoleBasedAccessControlBundle::class)]
 #[RunTestsInSeparateProcesses]

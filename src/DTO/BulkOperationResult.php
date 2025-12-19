@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Tourze\RoleBasedAccessControlBundle\Service;
+namespace Tourze\RoleBasedAccessControlBundle\DTO;
 
-class BulkOperationResult
+final class BulkOperationResult
 {
     /**
      * @param int $successCount 成功数量

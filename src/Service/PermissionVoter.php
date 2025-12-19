@@ -11,7 +11,7 @@ use Symfony\Component\Security\Core\User\UserInterface;
 /**
  * @extends Voter<string, mixed>
  */
-class PermissionVoter extends Voter
+final class PermissionVoter extends Voter
 {
     public function __construct(
         private readonly PermissionManagerInterface $permissionManager,

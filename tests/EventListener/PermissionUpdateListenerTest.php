@@ -33,9 +33,9 @@ class PermissionUpdateListenerTest extends AbstractIntegrationTestCase
         $permission->setUpdateTime($originalUpdateTime);
 
         $changeSet = [];
-        $mockEm = $this->createMock(EntityManagerInterface::class);
+        $em = self::getEntityManager();
         $entity = new \stdClass();
-        $args = new PreUpdateEventArgs($entity, $mockEm, $changeSet);
+        $args = new PreUpdateEventArgs($entity, $em, $changeSet);
 
         $this->listener->preUpdate($permission, $args);
 
@@ -58,9 +58,9 @@ class PermissionUpdateListenerTest extends AbstractIntegrationTestCase
         $permission->setCreateTime($originalCreateTime);
 
         $changeSet = [];
-        $mockEm = $this->createMock(EntityManagerInterface::class);
+        $em = self::getEntityManager();
         $entity = new \stdClass();
-        $args = new PreUpdateEventArgs($entity, $mockEm, $changeSet);
+        $args = new PreUpdateEventArgs($entity, $em, $changeSet);
 
         $this->listener->preUpdate($permission, $args);
 
@@ -74,9 +74,9 @@ class PermissionUpdateListenerTest extends AbstractIntegrationTestCase
     {
         $permission = new Permission();
         $changeSet = [];
-        $mockEm = $this->createMock(EntityManagerInterface::class);
+        $em = self::getEntityManager();
         $entity = new \stdClass();
-        $args = new PreUpdateEventArgs($entity, $mockEm, $changeSet);
+        $args = new PreUpdateEventArgs($entity, $em, $changeSet);
 
         $this->listener->preUpdate($permission, $args);
 

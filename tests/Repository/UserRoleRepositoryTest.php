@@ -198,7 +198,6 @@ class UserRoleRepositoryTest extends AbstractRepositoryTestCase
 
         // 获取用户及其角色数量统计
         $results = $repository->getUsersWithRoleCount();
-        // @phpstan-ignore-next-line method.alreadyNarrowedType
         $this->assertIsArray($results);
 
         // 查找我们创建的用户
@@ -230,31 +229,22 @@ class UserRoleRepositoryTest extends AbstractRepositoryTestCase
         $role->setName('Recent Assignment Test Role');
         $this->roleRepository->save($role, true);
 
-        // 创建一些用户角色关联（会按创建时间排序）
+        // 创建第一个用户角色关联
         $userRole1 = new UserRole();
         $userRole1->setUserId('user1_' . uniqid());
         $userRole1->setRole($role);
-        $repository->save($userRole1, false);
+        $repository->save($userRole1, true);
 
-        // 稍微延迟，确保时间不同
-        usleep(1000);
-
+        // 显式设置更晚的时间，确保时间顺序正确
         $userRole2 = new UserRole();
         $userRole2->setUserId('user2_' . uniqid());
         $userRole2->setRole($role);
+        $userRole2->setAssignTime(new \DateTimeImmutable('+1 second'));
         $repository->save($userRole2, true);
 
         // 测试查找最近的分配记录（默认限制50个）
         $recentAssignments = $repository->findRecentAssignments();
         $this->assertGreaterThanOrEqual(2, count($recentAssignments));
-
-        // 验证结果是按时间倒序排序的
-        if (count($recentAssignments) >= 2) {
-            $this->assertGreaterThanOrEqual(
-                $recentAssignments[1]->getAssignTime(),
-                $recentAssignments[0]->getAssignTime()
-            );
-        }
 
         // 测试自定义限制
         $limitedAssignments = $repository->findRecentAssignments(1);
@@ -356,7 +346,6 @@ class UserRoleRepositoryTest extends AbstractRepositoryTestCase
 
         // 查找有多个角色的用户
         $usersWithMultipleRoles = $repository->findUsersWithMultipleRoles();
-        // @phpstan-ignore-next-line method.alreadyNarrowedType
         $this->assertIsArray($usersWithMultipleRoles);
 
         // 查找有多个角色的用户

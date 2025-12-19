@@ -8,7 +8,7 @@ use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
 use Tourze\RoleBasedAccessControlBundle\Entity\Permission;
 
-class PermissionFixtures extends Fixture
+final class PermissionFixtures extends Fixture
 {
     public function load(ObjectManager $manager): void
     {

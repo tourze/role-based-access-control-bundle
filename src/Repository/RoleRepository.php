@@ -13,7 +13,7 @@ use Tourze\RoleBasedAccessControlBundle\Entity\Role;
  * @extends ServiceEntityRepository<Role>
  */
 #[AsRepository(entityClass: Role::class)]
-class RoleRepository extends ServiceEntityRepository
+final class RoleRepository extends ServiceEntityRepository
 {
     public function __construct(ManagerRegistry $registry)
     {

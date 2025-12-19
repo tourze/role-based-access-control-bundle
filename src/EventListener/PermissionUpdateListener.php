@@ -10,7 +10,7 @@ use Doctrine\ORM\Events;
 use Tourze\RoleBasedAccessControlBundle\Entity\Permission;
 
 #[AsEntityListener(event: Events::preUpdate, method: 'preUpdate', entity: Permission::class)]
-class PermissionUpdateListener
+final class PermissionUpdateListener
 {
     public function preUpdate(Permission $permission, PreUpdateEventArgs $args): void
     {

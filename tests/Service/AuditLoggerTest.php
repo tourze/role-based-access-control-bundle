@@ -6,9 +6,9 @@ namespace Tourze\RoleBasedAccessControlBundle\Tests\Service;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Symfony\Component\Security\Core\User\UserInterface;
 use Tourze\PHPUnitSymfonyKernelTest\AbstractIntegrationTestCase;
 use Tourze\RoleBasedAccessControlBundle\Service\AuditLogger;
-use Tourze\RoleBasedAccessControlBundle\Tests\TestUser;
 
 /**
  * @internal
@@ -45,7 +45,26 @@ class AuditLoggerTest extends AbstractIntegrationTestCase
 
     public function testLogPermissionCheckExecutesWithoutError(): void
     {
-        $user = new TestUser('test@example.com');
+        $user = new class('test@example.com') implements UserInterface {
+            public function __construct(private string $email)
+            {
+            }
+
+            public function getUserIdentifier(): string
+            {
+                return $this->email;
+            }
+
+            /** @return array<string> */
+            public function getRoles(): array
+            {
+                return ['ROLE_USER'];
+            }
+
+            public function eraseCredentials(): void
+            {
+            }
+        };
         $permissionCode = 'PERMISSION_USER_EDIT';
 
         // 测试方法调用不会抛出异常

@@ -14,7 +14,7 @@ use Tourze\RoleBasedAccessControlBundle\Entity\UserRole;
 /**
  * RBAC权限管理菜单服务
  */
-readonly class AdminMenu implements MenuProviderInterface
+final readonly class AdminMenu implements MenuProviderInterface
 {
     public function __construct(
         private ?LinkGeneratorInterface $linkGenerator = null,

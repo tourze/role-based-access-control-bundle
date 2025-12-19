@@ -4,7 +4,7 @@ namespace Tourze\RoleBasedAccessControlBundle\DependencyInjection;
 
 use Tourze\SymfonyDependencyServiceLoader\AutoExtension;
 
-class RoleBasedAccessControlExtension extends AutoExtension
+final class RoleBasedAccessControlExtension extends AutoExtension
 {
     protected function getConfigDir(): string
     {

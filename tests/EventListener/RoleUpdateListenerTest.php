@@ -33,9 +33,9 @@ class RoleUpdateListenerTest extends AbstractIntegrationTestCase
         $role->setUpdateTime($originalUpdateTime);
 
         $changeSet = [];
-        $mockEm = $this->createMock(EntityManagerInterface::class);
+        $em = self::getEntityManager();
         $entity = new \stdClass();
-        $args = new PreUpdateEventArgs($entity, $mockEm, $changeSet);
+        $args = new PreUpdateEventArgs($entity, $em, $changeSet);
 
         $this->listener->preUpdate($role, $args);
 
@@ -60,9 +60,9 @@ class RoleUpdateListenerTest extends AbstractIntegrationTestCase
         $role->setCreateTime($originalCreateTime);
 
         $changeSet = [];
-        $mockEm = $this->createMock(EntityManagerInterface::class);
+        $em = self::getEntityManager();
         $entity = new \stdClass();
-        $args = new PreUpdateEventArgs($entity, $mockEm, $changeSet);
+        $args = new PreUpdateEventArgs($entity, $em, $changeSet);
 
         $this->listener->preUpdate($role, $args);
 
@@ -78,9 +78,9 @@ class RoleUpdateListenerTest extends AbstractIntegrationTestCase
     {
         $role = new Role();
         $changeSet = [];
-        $mockEm = $this->createMock(EntityManagerInterface::class);
+        $em = self::getEntityManager();
         $entity = new \stdClass();
-        $args = new PreUpdateEventArgs($entity, $mockEm, $changeSet);
+        $args = new PreUpdateEventArgs($entity, $em, $changeSet);
 
         $this->listener->preUpdate($role, $args);
 
@@ -92,9 +92,9 @@ class RoleUpdateListenerTest extends AbstractIntegrationTestCase
     {
         $role = new Role();
         $changeSet = [];
-        $mockEm = $this->createMock(EntityManagerInterface::class);
+        $em = self::getEntityManager();
         $entity = new \stdClass();
-        $args = new PreUpdateEventArgs($entity, $mockEm, $changeSet);
+        $args = new PreUpdateEventArgs($entity, $em, $changeSet);
 
         $this->listener->preUpdate($role, $args);
 
